@@ -9,8 +9,12 @@ class TursoDatabase {
     async initialize() {
         try {
             // Get credentials from environment variables
-            const dbUrl = process.env.TURSO_CONNECTION_URL || process.env.DATABASE_URL;
-            const authToken = process.env.TURSO_AUTH_TOKEN;
+            // Get credentials from environment variables and clean them (remove quotes/spaces)
+            let dbUrl = process.env.TURSO_CONNECTION_URL || process.env.DATABASE_URL;
+            let authToken = process.env.TURSO_AUTH_TOKEN;
+
+            if (dbUrl) dbUrl = dbUrl.trim().replace(/^["']|["']$/g, '');
+            if (authToken) authToken = authToken.trim().replace(/^["']|["']$/g, '');
 
             if (!dbUrl) {
                 throw new Error('TURSO_CONNECTION_URL environment variable is required. Set it in Render > Environment Variables');
@@ -32,7 +36,7 @@ class TursoDatabase {
             logger.info('Testing database connection...');
             const result = await Promise.race([
                 this.db.execute('SELECT 1 as connection_test'),
-                new Promise((_, reject) => 
+                new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('Database connection timeout (30s)')), 30000)
                 )
             ]);
@@ -157,34 +161,34 @@ class TursoDatabase {
     convertBigInts(obj, depth = 0) {
         // Prevent infinite recursion
         if (depth > 100) return null;
-        
+
         if (obj === null || obj === undefined) return obj;
-        
+
         // Handle BigInt
         if (typeof obj === 'bigint') {
             return Number(obj);
         }
-        
+
         // Handle boolean - keep as boolean for API (JSON supports booleans)
         if (typeof obj === 'boolean') {
             return obj;
         }
-        
+
         // Handle Date
         if (obj instanceof Date) {
             return obj.toISOString();
         }
-        
+
         // Handle regular expressions and other non-serializable objects
         if (typeof obj === 'function' || typeof obj === 'symbol') {
             return undefined;
         }
-        
+
         // Handle arrays
         if (Array.isArray(obj)) {
             return obj.map(item => this.convertBigInts(item, depth + 1)).filter(item => item !== undefined);
         }
-        
+
         // Handle plain objects
         if (typeof obj === 'object' && obj.constructor === Object) {
             const converted = {};
@@ -197,7 +201,7 @@ class TursoDatabase {
             }
             return converted;
         }
-        
+
         // For Turso objects or other types, try to convert to string if needed
         if (typeof obj === 'object') {
             try {
@@ -215,7 +219,7 @@ class TursoDatabase {
                 return null;
             }
         }
-        
+
         return obj;
     }
 
