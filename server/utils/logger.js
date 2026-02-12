@@ -45,17 +45,15 @@ const logger = winston.createLogger({
     ],
 });
 
-// Console logging in development
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                winston.format.simple()
-            ),
-        })
-    );
-}
+// Console logging (Enable in production for Render logs)
+logger.add(
+    new winston.transports.Console({
+        format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.simple()
+        ),
+    })
+);
 
 // Audit logging helper
 logger.audit = (action, userId, details) => {
