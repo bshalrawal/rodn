@@ -1,0 +1,56 @@
+services:
+  - type: web
+    name: rodb-news-platform
+    env: node
+    plan: starter
+    region: oregon
+    
+    # Build command
+    buildCommand: npm install
+    
+    # Start command - runs the Express server
+    startCommand: npm start
+    
+    # Health check endpoint
+    healthCheckPath: /api/health
+    
+    # Environment variables
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: LOG_LEVEL
+        value: info
+      - key: TURSO_CONNECTION_URL
+        fromSecret: TURSO_CONNECTION_URL
+      - key: TURSO_AUTH_TOKEN
+        fromSecret: TURSO_AUTH_TOKEN
+      - key: JWT_SECRET
+        fromSecret: JWT_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromSecret: JWT_REFRESH_SECRET
+      - key: SESSION_SECRET
+        fromSecret: SESSION_SECRET
+      - key: ADMIN_SECRET
+        fromSecret: ADMIN_SECRET
+      - key: CRON_SECRET
+        fromSecret: CRON_SECRET
+      - key: CORS_ORIGIN
+        value: https://yourdomain.com
+      - key: FRONTEND_URL
+        value: https://yourdomain.com
+
+# Scheduled Jobs (Cron Tasks)
+jobs:
+  - type: cron
+    name: publish-scheduled-articles
+    schedule: "0 */6 * * *"
+    # Use the service to call the endpoint - will be set to service URL
+    command: curl -X GET https://<render-service-url>/api/cron/publish-scheduled-articles -H "x-cron-secret:$CRON_SECRET"
+    
+  - type: cron
+    name: cleanup-old-logs
+    schedule: "0 2 * * *"
+    # Use the service to call the endpoint
+    command: curl -X GET https://<render-service-url>/api/cron/cleanup-old-logs -H "x-cron-secret:$CRON_SECRET"
