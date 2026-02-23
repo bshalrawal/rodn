@@ -83,14 +83,28 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Session middleware for OAuth
 const session = require('express-session');
+
+// 🔒 SECURITY FIX: Generate secure session secret from environment
+const getSessionSecret = () => {
+    const secret = process.env.SESSION_SECRET;
+    if (!secret || secret === 'default-session-secret-change-this-in-production') {
+        if (process.env.NODE_ENV === 'production') {
+            throw new Error('SESSION_SECRET must be set in production');
+        }
+        logger.warn('⚠️  SESSION_SECRET not set, using random secret for development only');
+        return require('crypto').randomBytes(32).toString('hex');
+    }
+    return secret;
+};
+
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'default-session-secret-change-this-in-production',
+    secret: getSessionSecret(),
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+        httpOnly: true, // 🔒 Prevent JavaScript access
+        sameSite: 'strict', // 🔒 CSRF protection
         maxAge: 1000 * 60 * 60 * 24 // 24 hours
     }
 }));

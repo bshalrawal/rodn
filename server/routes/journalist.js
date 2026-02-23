@@ -97,7 +97,7 @@ router.post('/articles', async (req, res) => {
 
         logger.info(`Article created by journalist ${req.user.id}`, { articleId: result.lastID });
 
-        const article = await database.get('SELECT * FROM articles WHERE id = ?', [result.lastID]);
+        const article = await database.get('SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit, category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked, language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count, published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at FROM articles WHERE id = ?', [result.lastID]);
         res.status(201).json({ article });
     } catch (error) {
         logger.error('Article creation error:', error);
@@ -110,7 +110,7 @@ router.get('/articles', async (req, res) => {
     try {
         const { status, limit = 50, offset = 0 } = req.query;
 
-        let query = 'SELECT * FROM articles WHERE author_id = ?';
+        let query = 'SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit, category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked, language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count, published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at FROM articles WHERE author_id = ?';
         const params = [req.user.id];
 
         if (status) {
@@ -134,7 +134,7 @@ router.get('/articles', async (req, res) => {
 router.get('/articles/:id', async (req, res) => {
     try {
         const article = await database.get(
-            'SELECT * FROM articles WHERE id = ? AND author_id = ?',
+            'SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit, category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked, language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count, published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at FROM articles WHERE id = ? AND author_id = ?',
             [req.params.id, req.user.id]
         );
 
@@ -154,7 +154,7 @@ router.put('/articles/:id', async (req, res) => {
     try {
         // Check ownership
         const existing = await database.get(
-            'SELECT * FROM articles WHERE id = ? AND author_id = ?',
+            'SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit, category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked, language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count, published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at FROM articles WHERE id = ? AND author_id = ?',
             [req.params.id, req.user.id]
         );
 
@@ -212,7 +212,7 @@ router.put('/articles/:id', async (req, res) => {
 
         logger.info(`Article ${req.params.id} updated by journalist ${req.user.id}`);
 
-        const article = await database.get('SELECT * FROM articles WHERE id = ?', [req.params.id]);
+        const article = await database.get('SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit, category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked, language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count, published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at FROM articles WHERE id = ?', [req.params.id]);
         res.json({ article });
     } catch (error) {
         logger.error('Article update error:', error);
@@ -224,7 +224,7 @@ router.put('/articles/:id', async (req, res) => {
 router.delete('/articles/:id', async (req, res) => {
     try {
         const article = await database.get(
-            'SELECT * FROM articles WHERE id = ? AND author_id = ?',
+            'SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit, category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked, language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count, published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at FROM articles WHERE id = ? AND author_id = ?',
             [req.params.id, req.user.id]
         );
 
@@ -252,14 +252,58 @@ router.delete('/articles/:id', async (req, res) => {
 // Public endpoint for website (no auth required)
 router.get('/news-ticker/public/active', async (req, res) => {
     try {
-        const items = await database.all(
-            `SELECT id, title, content, link_url, is_active, created_at
+        let items = [];
+
+        // First, get items from news_ticker table (journalist-created items)
+        const tickerItems = await database.all(
+            `SELECT id, title, content as text, link_url, is_active, created_at
              FROM news_ticker
              WHERE is_active = 1
              ORDER BY created_at DESC
              LIMIT 20`,
             []
         );
+
+        // Map to consistent format
+        items = tickerItems.map(item => ({
+            id: item.id,
+            title: item.title,
+            content: item.text,
+            link_url: item.link_url,
+            is_active: item.is_active,
+            created_at: item.created_at,
+            source: 'journalist'
+        }));
+
+        // Second, check if there are ticker items in settings (from admin panel)
+        try {
+            const tickerSetting = await database.get(
+                'SELECT value FROM settings WHERE key = ?',
+                ['ticker_text']
+            );
+
+            if (tickerSetting && tickerSetting.value) {
+                // Parse pipe-separated items from admin panel
+                const adminItems = tickerSetting.value
+                    .split('|')
+                    .map((item, idx) => ({
+                        id: `admin-${idx}`,
+                        title: item.trim(),
+                        content: item.trim(),
+                        link_url: null,
+                        is_active: 1,
+                        created_at: new Date().toISOString(),
+                        source: 'admin'
+                    }))
+                    .filter(item => item.title.length > 0);
+
+                // Combine: admin items first (higher priority), then journalist items
+                items = [...adminItems, ...items];
+            }
+        } catch (e) {
+            // Settings table might not exist or have ticker_text, just continue with journalist items
+            logger.info('No admin ticker settings found');
+        }
 
         res.json({ items });
     } catch (error) {

@@ -10,79 +10,28 @@ async function authenticate(req, res, next) {
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader === 'Bearer null' || authHeader === 'Bearer undefined') {
-            // BYPASS: Inject dummy admin user for temporary access
-            req.user = {
-                id: 1,
-                username: 'Temporary Admin',
-                email: 'admin@rodb.com',
-                is_active: true,
-                is_suspended: false,
-                roles: [{ name: 'admin' }],
-                permissions: [
-                    'ads.manage',
-                    'settings.manage',
-                    'user.read',
-                    'user.manage',
-                    'category.manage',
-                    'article.create',
-                    'article.update',
-                    'article.delete',
-                    'article.approve',
-                    'article.read',
-                    'tag.manage',
-                    'media.manage',
-                    'comment.manage',
-                    'dashboard.view',
-                    'navigation.manage'
-                ]
-            };
-            req.token = 'dummy-token';
-            return next();
+            // 🔒 SECURITY FIX: Require valid token - no bypass allowed
+            logger.warn('Authentication failed: Missing or invalid authorization header');
+            return res.status(401).json({ error: 'Authentication required' });
         }
 
         const token = authHeader.replace('Bearer ', '');
 
-        // First, try to verify as admin token
-        const ADMIN_SECRET = process.env.ADMIN_SECRET || securityConfig.jwt.secret;
+        // 🔒 SECURITY FIX: Properly verify token - no admin bypass
+        // Verify token using proper JWT validation
+        let decoded;
         try {
-            const adminDecoded = jwt.verify(token, ADMIN_SECRET);
-            if (adminDecoded.type === 'admin' && adminDecoded.isAdmin) {
-                // This is an admin token - inject admin user
-                req.user = {
-                    id: 1,
-                    username: 'Admin',
-                    email: 'admin@rodb.com',
-                    is_active: true,
-                    is_suspended: false,
-                    roles: [{ name: 'admin' }],
-                    permissions: [
-                        'ads.manage',
-                        'settings.manage',
-                        'user.read',
-                        'user.manage',
-                        'category.manage',
-                        'article.create',
-                        'article.update',
-                        'article.delete',
-                        'article.approve',
-                        'article.read',
-                        'tag.manage',
-                        'media.manage',
-                        'comment.manage',
-                        'dashboard.view',
-                        'navigation.manage'
-                    ]
-                };
-                req.token = token;
-                req.isAdmin = true;
-                return next();
-            }
-        } catch (adminError) {
-            // Not an admin token, try user token
+            decoded = await AuthService.verifyToken(token);
+        } catch (error) {
+            logger.error('Token verification failed:', error.message);
+            return res.status(401).json({ error: 'Invalid or expired token' });
         }
 
-        // Try to verify as user token
-        const decoded = await AuthService.verifyToken(token);
+        // Validate decoded token has userId
+        if (!decoded || !decoded.userId) {
+            logger.warn('Invalid token structure: missing userId');
+            return res.status(401).json({ error: 'Invalid token' });
+        }
 
         // Get user with roles and permissions
         const user = await User.findByIdWithRoles(decoded.userId);

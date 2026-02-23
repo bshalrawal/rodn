@@ -1,22 +1,12 @@
 require('dotenv').config();
+const express = require('express');
 const database = require('./config/database');
 const logger = require('./utils/logger');
 
 const PORT = process.env.PORT || 3000;
-// Bind to 0.0.0.0 by default to allow port forwarding / external access
 const HOST = process.env.HOST || '0.0.0.0';
 
-logger.info('='.repeat(60));
-logger.info('RODB Server Starting');
-logger.info(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-logger.info(`PORT: ${PORT}`);
-logger.info(`HOST: ${HOST}`);
-logger.info(`DB_PATH: ${process.env.DB_PATH || 'default (./server/data/rodb.db)'}`);
-logger.info('='.repeat(60));
-
-// Routes are defined in app.js - no need to redefine here
-
-let server;
+let isInitialized = false;
 
 // Seed function (from initDatabase.js)
 async function seedDefaultData() {
@@ -245,28 +235,29 @@ async function seedDefaultData() {
     logger.info('✓ Default data seeded successfully');
 }
 
-async function startServer() {
+// Initialize server on startup
+async function initializeServer() {
     try {
-        // Set startup timeout for Render (180 seconds)
-        const startupTimeout = setTimeout(() => {
-            logger.error('Server startup timeout - taking too long to initialize');
-            process.exit(1);
-        }, 180000);
+        logger.info('='.repeat(60));
+        logger.info('Initializing RODB Server...');
+        logger.info(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+        logger.info(`PORT: ${PORT}`);
+        logger.info('='.repeat(60));
 
-        // Initialize database FIRST before loading app (which loads routes/models)
+        // Initialize database
         logger.info('Initializing database...');
         logger.info(`TURSO_CONNECTION_URL set: ${!!process.env.TURSO_CONNECTION_URL}`);
         logger.info(`TURSO_AUTH_TOKEN set: ${!!process.env.TURSO_AUTH_TOKEN}`);
         
         await database.initialize();
-        clearTimeout(startupTimeout);
         logger.info('✓ Database initialized successfully');
 
         // Create schema if tables don't exist
         try {
             logger.info('Checking/creating database schema...');
-            const { createSchema } = require('./config/schema');
+            const { createSchema, validateSchema } = require('./config/schema');
             await createSchema();
+            await validateSchema();
             logger.info('✓ Database schema ready');
         } catch (schemaError) {
             logger.error('Schema creation error (might be OK if already exists):', schemaError.message);
@@ -278,11 +269,6 @@ async function startServer() {
         } catch (seedError) {
             logger.error('Seed data error:', seedError.message);
         }
-        
-        // NOW load the app after database is ready
-        logger.info('Loading Express app...');
-        const app = require('./app');
-        logger.info('✓ Express app loaded');
 
         // Auto-publish approved articles
         try {
@@ -293,47 +279,40 @@ async function startServer() {
             logger.error('Auto-publish error:', err);
         }
 
-        // Start server
-        server = app.listen(PORT, HOST, () => {
-            logger.info('='.repeat(60));
-            logger.info('✓ Server running successfully!');
-            logger.info(`  URL: http://${HOST}:${PORT}`);
-            logger.info(`  Admin: http://${HOST}:${PORT}/admin (Ctrl+Alt+A)`);
-            logger.info(`  Health: http://${HOST}:${PORT}/api/health`);
-            logger.info('='.repeat(60));
-        });
-
-        // Graceful shutdown
-        process.on('SIGTERM', gracefulShutdown);
-        process.on('SIGINT', gracefulShutdown);
+        isInitialized = true;
+        logger.info('✓ Server initialization complete');
 
     } catch (error) {
         logger.error('='.repeat(60));
-        logger.error('✗ Failed to start server:');
+        logger.error('✗ Failed to initialize server:');
         logger.error(error);
         logger.error('='.repeat(60));
         process.exit(1);
     }
 }
 
-async function gracefulShutdown() {
-    logger.info('Received shutdown signal, closing server gracefully...');
-
-    if (server) {
-        server.close(async () => {
-            logger.info('HTTP server closed');
-
-            try {
-                await database.close();
-                logger.info('Database connection closed');
-                process.exit(0);
-            } catch (error) {
-                logger.error('Error closing database:', error);
-                process.exit(1);
-            }
-        });
-    }
+// Initialize on startup
+if (!isInitialized) {
+    initializeServer().catch(err => {
+        logger.error('Fatal error during initialization:', err);
+        process.exit(1);
+    });
 }
 
-// Start the server
-startServer();
+// Export Express app - hosting platform will call app.listen()
+const app = require('./app');
+
+// Add initialization check middleware
+app.use((req, res, next) => {
+    if (!isInitialized) {
+        return res.status(503).json({ error: 'Server initializing...' });
+    }
+    next();
+});
+
+// Simple health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'Rodnpost is running successfully' });
+});
+
+module.exports = app;

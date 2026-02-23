@@ -106,7 +106,12 @@ class Article {
     // Find article by ID
     static async findById(id, includeUnpublished = false) {
         let query = `
-      SELECT a.*, 
+      SELECT a.id, a.headline, a.sub_headline, a.summary, a.body, a.slug,
+             a.featured_image_url, a.featured_image_caption, a.featured_image_alt, a.featured_image_credit,
+             a.category_id, a.author_id, a.editor_id, a.status, a.is_breaking, a.is_pinned, a.is_featured,
+             a.is_opinion, a.is_fact_checked, a.language, a.location_tag, a.source_attribution,
+             a.seo_title, a.seo_description, a.reading_time, a.view_count, a.like_count, a.comment_count,
+             a.published_at, a.scheduled_publish_at, a.scheduled_unpublish_at, a.created_at, a.updated_at,
              c.name as category_name, c.slug as category_slug,
              u.full_name as author_name, u.username as author_username,
              e.full_name as editor_name
@@ -118,7 +123,7 @@ class Article {
     `;
 
         if (!includeUnpublished) {
-            query += ' AND a.status = "published"';
+            query += ' AND a.status = \'published\'';
         }
 
         const article = await database.get(query, [id]);
@@ -139,7 +144,12 @@ class Article {
     // Find article by slug
     static async findBySlug(slug, includeUnpublished = false) {
         let query = `
-      SELECT a.*, 
+      SELECT a.id, a.headline, a.sub_headline, a.summary, a.body, a.slug,
+             a.featured_image_url, a.featured_image_caption, a.featured_image_alt, a.featured_image_credit,
+             a.category_id, a.author_id, a.editor_id, a.status, a.is_breaking, a.is_pinned, a.is_featured,
+             a.is_opinion, a.is_fact_checked, a.language, a.location_tag, a.source_attribution,
+             a.seo_title, a.seo_description, a.reading_time, a.view_count, a.like_count, a.comment_count,
+             a.published_at, a.scheduled_publish_at, a.scheduled_unpublish_at, a.created_at, a.updated_at,
              c.name as category_name, c.slug as category_slug,
              u.full_name as author_name, u.username as author_username,
              e.full_name as editor_name
@@ -151,7 +161,7 @@ class Article {
     `;
 
         if (!includeUnpublished) {
-            query += ' AND a.status = "published"';
+            query += ' AND a.status = \'published\'';
         }
 
         const article = await database.get(query, [slug]);
@@ -190,11 +200,11 @@ class Article {
             params.push(filters.status);
         } else if (!filters.includeUnpublished) {
             // Default public view: Published only
-            query += ' AND a.status = "published"';
+            query += ' AND a.status = \'published\'';
 
             // If scheduling check is enabled (for public view)
             if (filters.checkSchedule) {
-                query += ' AND (a.scheduled_publish_at IS NULL OR a.scheduled_publish_at <= datetime("now"))';
+                query += ' AND (a.scheduled_publish_at IS NULL OR a.scheduled_publish_at <= datetime(\'now\'))';
             }
         }
 
@@ -288,7 +298,7 @@ class Article {
 
         // Create new version if content changed
         if (updates.headline || updates.body) {
-            const article = await database.get('SELECT * FROM articles WHERE id = ?', [id]);
+            const article = await database.get('SELECT id, headline, body FROM articles WHERE id = ?', [id]);
             const lastVersion = await database.get(
                 'SELECT MAX(version_number) as max_version FROM article_versions WHERE article_id = ?',
                 [id]
@@ -398,7 +408,11 @@ class Article {
     static async getScheduledToPublish() {
         const now = new Date().toISOString();
         return await database.all(
-            `SELECT * FROM articles 
+            `SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit,
+                   category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked,
+                   language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count,
+                   published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at
+             FROM articles 
        WHERE status = 'approved' 
        AND scheduled_publish_at IS NOT NULL 
        AND scheduled_publish_at <= ?`,
@@ -410,7 +424,11 @@ class Article {
     static async getScheduledToUnpublish() {
         const now = new Date().toISOString();
         return await database.all(
-            `SELECT * FROM articles 
+            `SELECT id, headline, sub_headline, summary, body, slug, featured_image_url, featured_image_caption, featured_image_alt, featured_image_credit,
+                   category_id, author_id, editor_id, status, is_breaking, is_pinned, is_featured, is_opinion, is_fact_checked,
+                   language, location_tag, source_attribution, seo_title, seo_description, reading_time, view_count, like_count, comment_count,
+                   published_at, scheduled_publish_at, scheduled_unpublish_at, created_at, updated_at
+             FROM articles 
        WHERE status = 'published' 
        AND scheduled_unpublish_at IS NOT NULL 
        AND scheduled_unpublish_at <= ?`,

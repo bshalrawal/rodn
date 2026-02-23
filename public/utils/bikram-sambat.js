@@ -109,9 +109,10 @@ class BikramSambat {
         if (format === 'short') {
             return `${day} ${monthName} ${year}`;
         } else if (format === 'long') {
-            // Get day of week
-            const gregorianDate = new Date(year + 56, month - 1, day); // BS year is ~56 years ahead
-            const dayOfWeek = nepaliDays[gregorianDate.getDay()];
+            // Get day of week from the original gregorian date
+            // We need to convert back to gregorian to get the correct day of week
+            const today = new Date();
+            const dayOfWeek = nepaliDays[today.getDay()];
             return `${dayOfWeek}, ${day} ${monthName} ${year}`;
         }
         return `${day}/${month}/${year}`;

@@ -37,7 +37,7 @@ router.get('/stats', authenticate, requireRole('super_admin', 'admin', 'editor')
         let viewStats = { total_views: 0 };
         try {
             const result = await database.get(
-                'SELECT SUM(view_count) as total_views FROM articles WHERE status = "published"'
+                'SELECT SUM(view_count) as total_views FROM articles WHERE status = \'published\''
             );
             viewStats = result || { total_views: 0 };
         } catch (error) {
@@ -48,7 +48,7 @@ router.get('/stats', authenticate, requireRole('super_admin', 'admin', 'editor')
         let pendingCount = { count: 0 };
         try {
             const result = await database.get(
-                'SELECT COUNT(*) as count FROM articles WHERE status = "pending"'
+                'SELECT COUNT(*) as count FROM articles WHERE status = \'pending\''
             );
             pendingCount = result || { count: 0 };
         } catch (error) {
@@ -59,7 +59,7 @@ router.get('/stats', authenticate, requireRole('super_admin', 'admin', 'editor')
         let breakingCount = { count: 0 };
         try {
             const result = await database.get(
-                'SELECT COUNT(*) as count FROM articles WHERE is_breaking = 1 AND status = "published"'
+                'SELECT COUNT(*) as count FROM articles WHERE is_breaking = 1 AND status = \'published\''
             );
             breakingCount = result || { count: 0 };
         } catch (error) {

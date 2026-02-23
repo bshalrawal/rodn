@@ -371,4 +371,53 @@ async function createSchema() {
   }
 }
 
-module.exports = { createSchema };
+// Validation function to check and remove deprecated columns
+async function validateSchema() {
+  try {
+    logger.info('Validating database schema...');
+    
+    // Check articles table for deprecated 'published' column
+    const tableInfo = await database.all('PRAGMA table_info(articles)');
+    const columnNames = tableInfo.map(col => col.name);
+    
+    if (columnNames.includes('published')) {
+      logger.warn('Found deprecated "published" column, removing...');
+      
+      try {
+        // Recreate table without published column
+        const keepColumns = columnNames
+          .filter(c => c !== 'published')
+          .join(', ');
+        
+        await database.run('BEGIN TRANSACTION');
+        try {
+          await database.run(`
+            CREATE TABLE articles_new AS
+            SELECT ${keepColumns} FROM articles
+          `);
+          await database.run('DROP TABLE articles');
+          await database.run('ALTER TABLE articles_new RENAME TO articles');
+          
+          // Recreate indices
+          await database.run('CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status)');
+          await database.run('CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at)');
+          await database.run('CREATE INDEX IF NOT EXISTS idx_articles_author ON articles(author_id)');
+          
+          await database.run('COMMIT');
+          logger.info('✓ Removed deprecated "published" column');
+        } catch (txError) {
+          await database.run('ROLLBACK');
+          throw txError;
+        }
+      } catch (e) {
+        logger.error('Failed to remove deprecated column:', e.message);
+      }
+    }
+    
+    logger.info('✓ Schema validation completed');
+  } catch (error) {
+    logger.error('Schema validation error:', error);
+  }
+}
+
+module.exports = { createSchema, validateSchema };

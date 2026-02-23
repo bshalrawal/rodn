@@ -206,7 +206,7 @@ async function loadCategoryArticles(categorySlug) {
                 
                 // Load articles
                 if (data.articles && data.articles.length > 0) {
-                    loadMobileNewsFeedCards(data.articles, articlesContainer);
+                    loadMobileCategoryPageArticles(data.articles, articlesContainer);
                 } else {
                     articlesContainer.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:20px;">यस वर्गमा कुनै समाचार उपलब्ध छैन</p>';
                 }
@@ -556,7 +556,7 @@ async function loadInfoSettings() {
 // Ticker
 async function loadNewsTicker() {
     try {
-        // Try to load from journalist API public endpoint first (live ticker items)
+        // Load from journalist API public endpoint (live ticker items only)
         let items = [];
         try {
             const response = await fetch(`/api/journalist/news-ticker/public/active`);
@@ -568,27 +568,12 @@ async function loadNewsTicker() {
                 })) || [];
             }
         } catch (e) {
-            console.log('Ticker API not available, using fallback');
+            console.log('Ticker API not available');
         }
 
-        // Fallback to latest articles if no ticker items
-        if (items.length === 0) {
-            try {
-                const artRes = await fetch(`${API_BASE}/articles?limit=8&status=published`);
-                const artData = await artRes.json();
-                items = artData.articles?.map(a => ({
-                    text: a.headline,
-                    link: `/article/${a.slug}`
-                })) || [];
-            } catch (e) {
-                console.error('Failed to load fallback articles');
-            }
-        }
-
+        const tickerElement = document.getElementById('newsTicker');
+        
         if (items.length > 0) {
-            // Show ticker
-            document.getElementById('newsTicker').style.display = 'block';
-            
             // Create scrolling ticker HTML with links
             const html = items.map((item, idx) => 
                 `<span class="ticker-item" onclick="${item.link ? `window.location.href='${item.link}'` : ''};" style="${item.link ? 'cursor:pointer;' : ''}">
@@ -600,15 +585,19 @@ async function loadNewsTicker() {
             // Add items multiple times for seamless loop effect
             tickerItemsContainer.innerHTML = html + ' • ' + html + ' • ' + html;
 
-            // Add visible class to show ticker
-            document.getElementById('newsTicker').classList.add('visible');
+            // Show ticker with visible class
+            tickerElement.classList.add('visible');
         } else {
-            document.getElementById('newsTicker').style.display = 'none';
+            // Hide ticker if no items
+            tickerElement.classList.remove('visible');
         }
 
     } catch (e) {
         console.error('Ticker error:', e);
-        document.getElementById('newsTicker').style.display = 'none';
+        const tickerElement = document.getElementById('newsTicker');
+        if (tickerElement) {
+            tickerElement.classList.remove('visible');
+        }
     }
 }
 
@@ -742,23 +731,12 @@ async function loadAds() {
             }
 
             // Right Sidebar Ad - 300x250
-            const rightAd = getRandomAd(adsByPlacement.content_bottom);
-            if (rightAd) {
-                const container = document.getElementById('ad_right');
-                if (container) {
-                    container.innerHTML = `
-                        <div style="position: relative; background: var(--bg-body); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.3s ease; overflow: hidden; max-height: 400px; display: flex; align-items: center; justify-content: center;" 
-                             onclick="trackAdClick('${rightAd.id}', '${rightAd.link_url}'); return false;">
-                            ${renderAdCreative(rightAd, false)}
-                            <button style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; padding: 0;" onclick="event.stopPropagation(); closeAd('ad_right');">×</button>
-                        </div>
-                    `;
-                    trackAdImpression(rightAd.id);
-                }
-            }
+            // Note: Only load top-right ad (ad_right_before_trending) to avoid duplicate content_bottom placements
+            // ad_right slot remains empty since we only have 2 content placements
+
 
             // Right Ad Before Trending - 300x250
-            const rightAdBeforeTrending = getRandomAd(adsByPlacement.content_top);
+            const rightAdBeforeTrending = getRandomAd(adsByPlacement.content_bottom);
             if (rightAdBeforeTrending) {
                 const container = document.getElementById('ad_right_before_trending');
                 if (container) {
@@ -1160,20 +1138,25 @@ async function loadMobileHomePageAds() {
             return ads[Math.floor(Math.random() * ads.length)];
         };
 
-        // Mobile Header Ad - Under ticker with scroll-hide effect
-        const headerAd = getRandomAd(adsByPlacement.header);
-        if (headerAd && window.innerWidth <= 768) {
-            const container = document.getElementById('mobile_ad_header');
-            if (container) {
-                const containerWrapper = document.getElementById('mobileHeaderAdContainer');
-                containerWrapper.style.display = 'block';
-                container.innerHTML = `
-                    <div style="position: relative; display: flex; justify-content: center; align-items: center; width: 100%; cursor: pointer; border-radius: 0; overflow: hidden;" onclick="trackAdClick('${headerAd.id}', '${headerAd.link_url}'); return false;">
-                        ${renderAdCreative(headerAd, true)}
-                    </div>
-                `;
-                trackAdImpression(headerAd.id);
+        // Mobile Sticky Bottom Ad (320x50px mobile sticky)
+        const stickyAd = getRandomAd(adsByPlacement.mobile_sticky);
+        if (stickyAd && window.innerWidth <= 768) {
+            let stickyContainer = document.getElementById('mobile-sticky-ad-container');
+            if (!stickyContainer) {
+                stickyContainer = document.createElement('div');
+                stickyContainer.id = 'mobile-sticky-ad-container';
+                stickyContainer.className = 'mobile-sticky-ad';
+                document.body.appendChild(stickyContainer);
             }
+            stickyContainer.onclick = () => trackAdClick(stickyAd.id, stickyAd.link_url);
+            stickyContainer.style.cssText = 'position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; max-height: 100px; background: var(--bg-body); border-top: 1px solid var(--border); padding: 8px; overflow: hidden; cursor: pointer;';
+            stickyContainer.innerHTML = `
+                <div style="position: relative; display: flex; align-items: center; justify-content: center; height: 100%;">
+                    ${renderAdCreative(stickyAd, true)}
+                    <button style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: white; border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; padding: 0;" onclick="event.stopPropagation(); document.getElementById('mobile-sticky-ad-container').style.display='none';">×</button>
+                </div>
+            `;
+            trackAdImpression(stickyAd.id);
         }
 
         // Ad before trending
@@ -1498,7 +1481,8 @@ async function loadMobileCategorySections() {
         // Fetch articles for each category
         for (const category of categories) {
             try {
-                const articlesResponse = await fetch(`${API_BASE}/articles?category=${category.id}&limit=3&status=published`);
+                // Fetch more articles to check if we have more than 4
+                const articlesResponse = await fetch(`${API_BASE}/articles?category=${category.id}&limit=100&status=published`);
                 const articlesData = await articlesResponse.json();
                 const articles = articlesData.articles || [];
 
@@ -1513,30 +1497,92 @@ async function loadMobileCategorySections() {
                         <div class="mobile-category-articles">
                 `;
 
-                // Add articles for this category
-                for (const article of articles.slice(0, 3)) {
-                    const imageUrl = article.featured_image_url ? 
-                        (article.featured_image_url.startsWith('data:') ? 
-                            article.featured_image_url : 
-                            optimizeImageUrl(article.featured_image_url, 400)) 
+                // If more than 3 articles, show latest in big format
+                if (articles.length > 3) {
+                    const latestArticle = articles[0];
+                    const imageUrl = latestArticle.featured_image_url ? 
+                        (latestArticle.featured_image_url.startsWith('data:') ? 
+                            latestArticle.featured_image_url : 
+                            optimizeImageUrl(latestArticle.featured_image_url, 500)) 
                         : '';
                     
-                    // Get summary or use a truncated version of content
-                    const summary = article.summary || (article.content ? article.content.substring(0, 200) + '...' : 'No summary available');
+                    const summary = latestArticle.summary || (latestArticle.content ? latestArticle.content.substring(0, 150) + '...' : 'No summary available');
                     
                     categoryHTML += `
-                        <a href="/article.html?slug=${article.slug}" class="mobile-category-article">
+                        <a href="/article.html?slug=${latestArticle.slug}" class="mobile-category-article-featured">
                             ${imageUrl ? 
-                                `<img src="${imageUrl}" alt="${article.headline}" class="mobile-category-article-image">` :
-                                `<div class="mobile-category-article-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; text-align: center; padding: 10px; font-size: 0.9em; line-height: 1.35;">${article.headline.substring(0, 60)}</div>`
+                                `<img src="${imageUrl}" alt="${latestArticle.headline}" class="mobile-category-article-featured-image">` :
+                                `<div class="mobile-category-article-featured-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; text-align: center; padding: 15px; font-size: 1em; line-height: 1.35;">${latestArticle.headline.substring(0, 60)}</div>`
                             }
-                            <div class="mobile-category-article-content">
-                                <h4 class="mobile-category-article-title">${article.headline}</h4>
-                                <div class="mobile-category-article-summary">${summary}</div>
-                                <div class="mobile-category-article-meta">${timeAgo(article.published_at, article.created_at)}</div>
+                            <div class="mobile-category-article-featured-content">
+                                <h4 class="mobile-category-article-featured-title">${latestArticle.headline}</h4>
+                                <div class="mobile-category-article-featured-summary">${summary}</div>
+                                <div class="mobile-category-article-featured-meta">${timeAgo(latestArticle.published_at, latestArticle.created_at)}</div>
                             </div>
                         </a>
                     `;
+
+                    // Show remaining articles (up to 3 more) in small format
+                    const remainingArticles = articles.slice(1, 4);
+                    for (const article of remainingArticles) {
+                        const imageUrl = article.featured_image_url ? 
+                            (article.featured_image_url.startsWith('data:') ? 
+                                article.featured_image_url : 
+                                optimizeImageUrl(article.featured_image_url, 300)) 
+                            : '';
+                        
+                        const summary = article.summary || (article.content ? article.content.substring(0, 80) : 'No summary');
+                        
+                        categoryHTML += `
+                            <a href="/article.html?slug=${article.slug}" class="mobile-category-article-small">
+                                ${imageUrl ? 
+                                    `<img src="${imageUrl}" alt="${article.headline}" class="mobile-category-article-small-image">` :
+                                    `<div class="mobile-category-article-small-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; text-align: center; padding: 8px; font-size: 0.75em; line-height: 1.2;">${article.headline.substring(0, 45)}</div>`
+                                }
+                                <div class="mobile-category-article-small-content">
+                                    <h5 class="mobile-category-article-small-title">${article.headline}</h5>
+                                    <p class="mobile-category-article-small-summary">${summary}</p>
+                                    <div class="mobile-category-article-small-meta">${timeAgo(article.published_at, article.created_at)}</div>
+                                </div>
+                            </a>
+                        `;
+                    }
+
+                    // Show "View More" button if more than 4 articles
+                    if (articles.length > 4) {
+                        const categoryId = category.id;
+                        const categoryName = category.name;
+                        categoryHTML += `
+                            <button class="mobile-category-view-more" onclick="openCategoryModal('${categoryId}', '${categoryName}', ${articles.length})">
+                                देख्नुहोस् (${articles.length - 1} अन्य)
+                            </button>
+                        `;
+                    }
+                } else {
+                    // If 3 or fewer articles, show all in small format
+                    for (const article of articles) {
+                        const imageUrl = article.featured_image_url ? 
+                            (article.featured_image_url.startsWith('data:') ? 
+                                article.featured_image_url : 
+                                optimizeImageUrl(article.featured_image_url, 300)) 
+                            : '';
+                        
+                        const summary = article.summary || (article.content ? article.content.substring(0, 80) : 'No summary');
+                        
+                        categoryHTML += `
+                            <a href="/article.html?slug=${article.slug}" class="mobile-category-article-small">
+                                ${imageUrl ? 
+                                    `<img src="${imageUrl}" alt="${article.headline}" class="mobile-category-article-small-image">` :
+                                    `<div class="mobile-category-article-small-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; text-align: center; padding: 8px; font-size: 0.75em; line-height: 1.2;">${article.headline.substring(0, 45)}</div>`
+                                }
+                                <div class="mobile-category-article-small-content">
+                                    <h5 class="mobile-category-article-small-title">${article.headline}</h5>
+                                    <p class="mobile-category-article-small-summary">${summary}</p>
+                                    <div class="mobile-category-article-small-meta">${timeAgo(article.published_at, article.created_at)}</div>
+                                </div>
+                            </a>
+                        `;
+                    }
                 }
 
                 categoryHTML += `
@@ -1551,6 +1597,69 @@ async function loadMobileCategorySections() {
         container.innerHTML = categoryHTML;
     } catch (e) {
         console.error('Mobile category sections error:', e);
+    }
+}
+
+// Open category modal with all articles
+async function openCategoryModal(categoryId, categoryName, totalCount) {
+    try {
+        // Fetch all articles for this category
+        const response = await fetch(`${API_BASE}/articles?category=${categoryId}&limit=100&status=published`);
+        const data = await response.json();
+        const articles = data.articles || [];
+
+        // Create modal
+        let modalHTML = `
+            <div id="categoryModal" class="modal" style="display: flex;">
+                <div class="modal-content" style="max-width: 90%; max-height: 90vh; overflow-y: auto;">
+                    <span class="close-modal" onclick="document.getElementById('categoryModal').remove();">&times;</span>
+                    <h2 style="color: var(--primary); margin-bottom: 20px;">${categoryName}</h2>
+                    <div class="category-modal-articles">
+        `;
+
+        // Add all articles
+        for (const article of articles) {
+            const imageUrl = article.featured_image_url ? 
+                (article.featured_image_url.startsWith('data:') ? 
+                    article.featured_image_url : 
+                    optimizeImageUrl(article.featured_image_url, 300)) 
+                : '';
+            
+            const summary = article.summary || (article.content ? article.content.substring(0, 100) : 'No summary');
+            
+            modalHTML += `
+                <a href="/article.html?slug=${article.slug}" class="mobile-feed-card" style="text-decoration: none; color: inherit;">
+                    ${imageUrl ? 
+                        `<img src="${imageUrl}" alt="${article.headline}" class="mobile-feed-card-image">` :
+                        `<div class="mobile-feed-card-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; padding: 12px; color: white; font-weight: 700; font-size: 0.85em; text-align: center; line-height: 1.35;">${article.headline.substring(0, 60)}</div>`
+                    }
+                    <div class="mobile-feed-card-content">
+                        <h4 class="mobile-feed-card-title">${article.headline}</h4>
+                        <p class="mobile-feed-card-summary">${summary}</p>
+                        <div class="mobile-feed-card-meta">${timeAgo(article.published_at, article.created_at)}</div>
+                    </div>
+                </a>
+            `;
+        }
+
+        modalHTML += `
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Close modal on background click
+        const modal = document.getElementById('categoryModal');
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    } catch (e) {
+        console.error('Error opening category modal:', e);
     }
 }
 
@@ -1581,8 +1690,11 @@ async function loadMobileLayout() {
         // Load mobile ads (in-feed and sticky)
         loadMobileAds();
         
-        // Load ALL remaining articles as news feed (starting from index 2)
-        loadMobileNewsFeedCards(articles.slice(2));
+        // Load ALL remaining articles as news feed with pagination (starting from index 2)
+        // Store articles globally for pagination
+        window.mobileNewsFeedArticles = articles.slice(2);
+        window.mobileNewsFeedPage = 0;
+        loadMobileNewsFeedPage();
         
     } catch (e) {
         console.error('Error loading mobile layout:', e);
@@ -1693,14 +1805,27 @@ async function loadMobileTrendingFromSettings() {
     }
 }
 
-function loadMobileNewsFeedCards(articles, container = null) {
-    const feedContainer = container || document.getElementById('mobileNewsFeed');
+// Convert number to Nepali script
+function toNepaliNumber(num) {
+    const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+    return String(num).split('').map(digit => nepaliDigits[parseInt(digit)]).join('');
+}
+
+function loadMobileNewsFeedPage() {
+    const ARTICLES_TO_SHOW = 5;
+    const feedContainer = document.getElementById('mobileNewsFeed');
+    const viewAllContainer = document.getElementById('mobileNewsFeedViewAll');
+    
     if (!feedContainer) return;
     
-    const html = articles.map(article => {
+    // Show only the first 5 articles
+    const articlesToShow = window.mobileNewsFeedArticles.slice(0, ARTICLES_TO_SHOW);
+    
+    // Generate HTML for articles
+    const html = articlesToShow.map(article => {
         const isDataUrl = article.featured_image_url && article.featured_image_url.startsWith('data:');
         const imageUrl = isDataUrl ? article.featured_image_url : optimizeImageUrl(article.featured_image_url, 300);
-        const summary = article.summary || article.body.substring(0, 80).replace(/<[^>]*>/g, '');
+        const summary = article.summary || (article.body ? article.body.substring(0, 100).replace(/<[^>]*>/g, '') : article.headline.substring(0, 100));
         
         return `
         <a href="/article.html?slug=${article.slug}" class="mobile-feed-card" style="text-decoration: none; color: inherit;">
@@ -1711,11 +1836,153 @@ function loadMobileNewsFeedCards(articles, container = null) {
             <div class="mobile-feed-card-content">
                 <h4 class="mobile-feed-card-title">${article.headline}</h4>
                 <p class="mobile-feed-card-summary">${summary}</p>
+                <div class="mobile-feed-card-meta">${timeAgo(article.published_at, article.created_at)}</div>
             </div>
         </a>
     `}).join('');
     
     feedContainer.innerHTML = html;
+    
+    // Show "View All" button if there are more than 5 articles
+    if (window.mobileNewsFeedArticles.length >= 5 && viewAllContainer) {
+        viewAllContainer.style.display = 'block';
+        const viewAllBtn = document.getElementById('viewAllNewsBtn');
+        if (viewAllBtn) {
+            viewAllBtn.onclick = loadAllMobileNews;
+        }
+    } else if (viewAllContainer) {
+        viewAllContainer.style.display = 'none';
+    }
+}
+
+// Load all news articles
+function loadAllMobileNews() {
+    const feedContainer = document.getElementById('mobileNewsFeed');
+    const viewAllContainer = document.getElementById('mobileNewsFeedViewAll');
+    
+    if (!feedContainer) return;
+    
+    // Generate HTML for all articles
+    const html = window.mobileNewsFeedArticles.map(article => {
+        const isDataUrl = article.featured_image_url && article.featured_image_url.startsWith('data:');
+        const imageUrl = isDataUrl ? article.featured_image_url : optimizeImageUrl(article.featured_image_url, 300);
+        const summary = article.summary || (article.body ? article.body.substring(0, 100).replace(/<[^>]*>/g, '') : article.headline.substring(0, 100));
+        
+        return `
+        <a href="/article.html?slug=${article.slug}" class="mobile-feed-card" style="text-decoration: none; color: inherit;">
+            ${article.featured_image_url ? 
+                `<img src="${imageUrl}" alt="${article.headline}" class="mobile-feed-card-image">` :
+                `<div class="mobile-feed-card-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; padding: 12px; color: white; font-weight: 700; font-size: 0.85em; text-align: center; line-height: 1.35;">${article.headline.substring(0, 60)}</div>`
+            }
+            <div class="mobile-feed-card-content">
+                <h4 class="mobile-feed-card-title">${article.headline}</h4>
+                <p class="mobile-feed-card-summary">${summary}</p>
+                <div class="mobile-feed-card-meta">${timeAgo(article.published_at, article.created_at)}</div>
+            </div>
+        </a>
+    `}).join('');
+    
+    feedContainer.innerHTML = html;
+    
+    // Hide "View All" button and show "Show Less" button
+    if (viewAllContainer) {
+        viewAllContainer.innerHTML = `<button id="showLessNewsBtn" class="view-all-btn show-less-btn">कम देखाउनुहोस्</button>`;
+        const showLessBtn = document.getElementById('showLessNewsBtn');
+        if (showLessBtn) {
+            showLessBtn.onclick = () => {
+                window.mobileNewsFeedArticles = window.mobileNewsFeedArticles; // Keep articles loaded
+                loadMobileNewsFeedPage();
+            };
+        }
+    }
+    
+    // Scroll to top of feed
+    feedContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function loadMobileNewsFeedCards(articles, container = null) {
+    const feedContainer = container || document.getElementById('mobileNewsFeed');
+    if (!feedContainer) return;
+    
+    const html = articles.map(article => {
+        const isDataUrl = article.featured_image_url && article.featured_image_url.startsWith('data:');
+        const imageUrl = isDataUrl ? article.featured_image_url : optimizeImageUrl(article.featured_image_url, 300);
+        const summary = article.summary || (article.body ? article.body.substring(0, 100).replace(/<[^>]*>/g, '') : article.headline.substring(0, 100));
+        
+        return `
+        <a href="/article.html?slug=${article.slug}" class="mobile-feed-card" style="text-decoration: none; color: inherit;">
+            ${article.featured_image_url ? 
+                `<img src="${imageUrl}" alt="${article.headline}" class="mobile-feed-card-image">` :
+                `<div class="mobile-feed-card-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; padding: 12px; color: white; font-weight: 700; font-size: 0.85em; text-align: center; line-height: 1.35;">${article.headline.substring(0, 60)}</div>`
+            }
+            <div class="mobile-feed-card-content">
+                <h4 class="mobile-feed-card-title">${article.headline}</h4>
+                <p class="mobile-feed-card-summary">${summary}</p>
+                <div class="mobile-feed-card-meta">${timeAgo(article.published_at, article.created_at)}</div>
+            </div>
+        </a>
+    `}).join('');
+    
+    feedContainer.innerHTML = html;
+}
+
+// Load articles for category page on mobile (Latest in big format, rest in small)
+function loadMobileCategoryPageArticles(articles, container) {
+    if (!container || articles.length === 0) return;
+    
+    let html = '';
+    
+    // Show latest article in featured large format
+    const latestArticle = articles[0];
+    const latestImageUrl = latestArticle.featured_image_url ? 
+        (latestArticle.featured_image_url.startsWith('data:') ? 
+            latestArticle.featured_image_url : 
+            optimizeImageUrl(latestArticle.featured_image_url, 500)) 
+        : '';
+    
+    const latestSummary = latestArticle.summary || (latestArticle.content ? latestArticle.content.substring(0, 150) + '...' : 'No summary available');
+    
+    html += `
+        <a href="/article.html?slug=${latestArticle.slug}" class="mobile-category-article-featured" style="text-decoration: none; color: inherit;">
+            ${latestImageUrl ? 
+                `<img src="${latestImageUrl}" alt="${latestArticle.headline}" class="mobile-category-article-featured-image">` :
+                `<div class="mobile-category-article-featured-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; text-align: center; padding: 15px; font-size: 1em; line-height: 1.35;">${latestArticle.headline.substring(0, 60)}</div>`
+            }
+            <div class="mobile-category-article-featured-content">
+                <h4 class="mobile-category-article-featured-title">${latestArticle.headline}</h4>
+                <div class="mobile-category-article-featured-summary">${latestSummary}</div>
+                <div class="mobile-category-article-featured-meta">${timeAgo(latestArticle.published_at, latestArticle.created_at)}</div>
+            </div>
+        </a>
+    `;
+    
+    // Show remaining articles in small format
+    const remainingArticles = articles.slice(1);
+    for (const article of remainingArticles) {
+        const imageUrl = article.featured_image_url ? 
+            (article.featured_image_url.startsWith('data:') ? 
+                article.featured_image_url : 
+                optimizeImageUrl(article.featured_image_url, 300)) 
+            : '';
+        
+        const summary = article.summary || (article.content ? article.content.substring(0, 80) : 'No summary');
+        
+        html += `
+            <a href="/article.html?slug=${article.slug}" class="mobile-category-article-small" style="text-decoration: none; color: inherit;">
+                ${imageUrl ? 
+                    `<img src="${imageUrl}" alt="${article.headline}" class="mobile-category-article-small-image">` :
+                    `<div class="mobile-category-article-small-image" style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; text-align: center; padding: 8px; font-size: 0.75em; line-height: 1.2;">${article.headline.substring(0, 45)}</div>`
+                }
+                <div class="mobile-category-article-small-content">
+                    <h5 class="mobile-category-article-small-title">${article.headline}</h5>
+                    <p class="mobile-category-article-small-summary">${summary}</p>
+                    <div class="mobile-category-article-small-meta">${timeAgo(article.published_at, article.created_at)}</div>
+                </div>
+            </a>
+        `;
+    }
+    
+    container.innerHTML = html;
 }
 
 // Load hot news for mobile layout
@@ -1935,7 +2202,7 @@ function generateShareButtons(article) {
                 </svg>
             </button>
             <button class="share-btn whatsapp" onclick="shareOnWhatsApp('${headline}', '${summary}', '${url}')" title="Share on WhatsApp">
-                <svg viewBox="0 0 24 24" fill="currentColor">
+                <svg viewBox="0 0 24 24" fill="white">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.67-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.076 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421-7.403h-.004a9.87 9.87 0 00-9.746 9.861c0 2.718.738 5.33 2.14 7.66l-2.35 7.34 7.494-2.976a9.9 9.9 0 004.738 1.2h.006c5.318 0 9.75-4.445 9.75-9.903 0-2.699-.719-5.206-2.078-7.38A9.865 9.865 0 0012.051 6.979"/>
                 </svg>
             </button>
