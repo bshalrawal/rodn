@@ -54,7 +54,7 @@
   "crons": [
     {
       "path": "/api/cron/publish-scheduled-articles",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/cleanup-old-logs",
