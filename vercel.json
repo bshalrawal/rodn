@@ -6,6 +6,14 @@
   },
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/public/site/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/public/admin/index.html"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api"
     },
